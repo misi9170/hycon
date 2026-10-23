@@ -2,9 +2,12 @@ import copy
 import inspect
 from abc import ABCMeta, abstractmethod
 
+from hycon.controllers.logger_base import LoggerBase
 
-class ControllerBase(metaclass=ABCMeta):
+
+class ControllerBase(LoggerBase, metaclass=ABCMeta):
     def __init__(self, interface, cname=None, verbose=True):
+        super().__init__()
         self._s = interface
         self.verbose = verbose
 
@@ -34,6 +37,13 @@ class ControllerBase(metaclass=ABCMeta):
         self._controls_dict = self.compute_controls(self._measurements_dict)
 
         output_dict = self._send_controls(input_dict)
+
+        time = (
+            self._measurements_dict.get("time")
+            if isinstance(self._measurements_dict, dict)
+            else None
+        )
+        self.log(time)
 
         return output_dict
 
@@ -76,7 +86,12 @@ class ControllerBase(metaclass=ABCMeta):
         in the hybrid supervisory controller when querying component controllers for their desired
         power references without actually updating their states.
         """
-        self._initial_state = copy.deepcopy(self.__dict__)
+        # The log cache is not controller state, so leave it out of the snapshot (copying it
+        # would also get slow as it grows). Tags made here are discarded by the restore.
+        self.__dict__.setdefault("_log_row", {})
+        self._initial_state = copy.deepcopy(
+            {k: v for k, v in self.__dict__.items() if k != "_log_cache"}
+        )
         controls_dict = self.compute_controls(measurements_dict)
         self.__dict__.update(copy.deepcopy(self._initial_state))
         return controls_dict
