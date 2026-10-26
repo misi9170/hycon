@@ -11,8 +11,6 @@ class BatteryController(ControllerBase):
     changes in power reference, which can lead to degradation.
     """
 
-    log_attributes = ["x"]
-
     def __init__(self, interface, cname, controller_parameters={}, verbose=True):
         """
         Instantiate BatteryController.
@@ -111,12 +109,13 @@ class BatteryController(ControllerBase):
         # Compute control
         u = self.c * self.x + self.d * e
 
-        self.tag("reference_power", reference_power)
-        self.tag("e", e)
-        self.tag("u", u)
-
         # Update controller internal state
         self.x = self.a * self.x + self.b * e
+
+        self.store("x", self.x)
+        self.store("reference_power", reference_power)
+        self.store("e", e)
+        self.store("u", u)
 
         controls_dict = {self.cname: {"power_setpoint": current_power + u}}
 

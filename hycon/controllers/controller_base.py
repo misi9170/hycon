@@ -87,7 +87,7 @@ class ControllerBase(LoggerBase, metaclass=ABCMeta):
         power references without actually updating their states.
         """
         # The log cache is not controller state, so leave it out of the snapshot (copying it
-        # would also get slow as it grows). Tags made here are discarded by the restore.
+        # would also get slow as it grows). Values stored here are discarded by the restore.
         self.__dict__.setdefault("_log_row", {})
         self._initial_state = copy.deepcopy(
             {k: v for k, v in self.__dict__.items() if k != "_log_cache"}

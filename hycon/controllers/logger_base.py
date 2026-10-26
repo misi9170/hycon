@@ -5,33 +5,31 @@ import pandas as pd
 
 class LoggerBase:
     """
-    Mixin that lets controllers log tagged values once per step.
+    Mixin that lets controllers log stored values once per step.
 
-    Values are tagged in two ways:
-        - Attributes: list attribute names in the class-level ``log_attributes``, e.g.
-          ``log_attributes = ["x"]``. These are read when log() is called.
-        - Any other value (e.g. a local variable in compute_controls): call
-          ``self.tag("name", value)``.
+    Store each value to log with ``self.store("name", value)``, including attributes
+    (e.g. ``self.store("x", self.x)``) and local variables in compute_controls.
 
-    log() appends one row (time, attributes, tags) to an in-memory cache and then calls log() on
+    log() appends one row (time and stored values) to an in-memory cache and then calls log() on
     any controllers held by this one (e.g. a supervisor's component controllers). Use get_log()
     or write_log() to retrieve the results.
     """
-
-    log_attributes = []
 
     def __init__(self):
         self._log_row = {}
         self._log_cache = []
 
-    def tag(self, name, value):
-        """Tag a value to be included in the next logged row."""
+    def store(self, name, value):
+        """
+        Store a value for the next logged row.
+
+        Repeated calls with the same name replace the pending value.
+        """
         self.__dict__.setdefault("_log_row", {})[name] = value
 
     def log(self, time=None):
-        """Append the current tagged values to the log cache, then log child controllers."""
+        """Append the current stored values to the log cache, then log child controllers."""
         row = {"time": time}
-        row.update({a: getattr(self, a) for a in self.log_attributes})
         row.update(self.__dict__.get("_log_row", {}))
         self._log_row = {}
         if len(row) > 1:
@@ -46,11 +44,34 @@ class LoggerBase:
             child.log(time)
 
     def get_log(self):
-        """Return this controller's logged values as a DataFrame."""
-        return pd.DataFrame(self.__dict__.get("_log_cache", []))
+        """
+        Return this controller's and its children's logs, outer-joined on time.
+
+        Signal columns are prefixed with the originating controller's cname.
+        Combining nonempty logs requires unique timestamps in each log.
+        """
+        combined = pd.DataFrame(self.__dict__.get("_log_cache", []))
+        if not combined.empty:
+            prefix = self.cname
+            combined = combined.rename(
+                columns={name: f"{prefix}.{name}" for name in combined.columns if name != "time"}
+            )
+
+        for child in self._child_loggers():
+            child_log = child.get_log()
+            if child_log.empty:
+                continue
+            if combined.empty:
+                combined = child_log
+                continue
+            overlap = (set(combined.columns) & set(child_log.columns)) - {"time"}
+            if overlap:
+                raise ValueError(f"Duplicate log columns: {sorted(overlap)}. Use distinct cnames.")
+            combined = combined.merge(child_log, on="time", how="outer", validate="one_to_one")
+        return combined
 
     def write_log(self, filename):
-        """Write this controller's logged values to a CSV file."""
+        """Write this controller's and its children's combined logs to a CSV file."""
         self.get_log().to_csv(filename, index=False)
 
     def _child_loggers(self):
