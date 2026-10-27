@@ -25,19 +25,18 @@ class LoggerMixin:
 
         Repeated calls with the same name replace the pending value.
         """
-        self.__dict__.setdefault("_log_row", {})[name] = value
+        # Copy so that later in-place changes (e.g. to arrays) don't alter logged values
+        self.__dict__.setdefault("_log_row", {})[name] = (
+            value if isinstance(value, (int, float, str, type(None))) else copy.deepcopy(value)
+        )
 
     def log(self, time=None):
         """Append the current stored values to the log cache, then log child controllers."""
         row = {"time": time}
         row.update(self.__dict__.get("_log_row", {}))
+        # Clear the pending row after committing it to the log cache
         self._log_row = {}
         if len(row) > 1:
-            # Copy so that later in-place changes (e.g. to arrays) don't alter logged values
-            row = {
-                k: v if isinstance(v, (int, float, str, type(None))) else copy.deepcopy(v)
-                for k, v in row.items()
-            }
             self.__dict__.setdefault("_log_cache", []).append(row)
 
         for child in self._child_loggers():

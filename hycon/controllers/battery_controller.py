@@ -112,10 +112,10 @@ class BatteryController(ControllerBase):
         # Update controller internal state
         self.x = self.a * self.x + self.b * e
 
-        self.store("x", self.x)
-        self.store("reference_power", reference_power)
-        self.store("e", e)
-        self.store("u", u)
+        self.store("internal_state", self.x)
+        self.store("processed_reference_power", reference_power)
+        self.store("error", e)
+        self.store("incremental_control", u)
 
         controls_dict = {self.cname: {"power_setpoint": current_power + u}}
 

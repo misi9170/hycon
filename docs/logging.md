@@ -36,11 +36,10 @@ timestamp.
 
 If no values have been stored, no row is appended. Values are not carried forward
 to subsequent rows. If different rows contain different signals, the DataFrame
-and CSV have missing entries for signals absent from a row.
+and CSV have missing entries (represented as `NaN`) for signals absent from a row.
 
-Mutable values such as arrays are copied when `log()` commits the row, so later
-changes do not affect that row. They are not copied by `store()`: if a mutable
-value will change before `log()`, pass a copy to `store()`.
+Mutable values such as arrays are copied when `store()` stores the row, so later
+changes do not affect that row.
 
 When calling `compute_controls()` directly rather than through `step()`, call
 `controller.log(time)` explicitly when you want to commit a row.
@@ -76,9 +75,9 @@ automatic periodic flushing.
 Every signal column is prefixed with its originating controller's `cname`,
 including the supervisor's signals. Only `time` remains unprefixed. For example,
 `supervisor.get_log()` might return `time`, `supervisor.reference_power`,
-`battery.x`, and `wind.error`. Missing subsystem rows appear as missing values.
+`battery.x`, and `wind.error`. Missing subsystem rows appear as missing values (`NaN`s).
 The supervisor need not store any signals itself to retrieve its subsystem logs.
-Calling `battery.get_log()` still retrieves just the battery and its own children.
+Calling `battery.get_log()` still retrieves just the battery log.
 
 Controllers with logged signals must have a valid `cname`. Use distinct names to
 avoid column collisions; overlapping signal columns raise an error rather than
@@ -86,14 +85,3 @@ being overwritten or automatically renamed. Combining nonempty logs also require
 unique timestamps within each log (including at most one missing timestamp).
 Duplicate timestamps raise a merge error rather than multiplying rows. Provide
 simulation time when combining multi-step logs.
-
-```python
-df = supervisor.get_log()
-supervisor.write_log("combined.csv")
-```
-
-Retrieving or writing a combined log does not change the individual caches.
-
-Arrays occupy a single DataFrame cell and are written as text in CSV, not
-expanded into separate columns. For separate columns, store each element with
-its own name.
