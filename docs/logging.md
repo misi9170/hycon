@@ -44,10 +44,10 @@ changes do not affect that row.
 When calling `compute_controls()` directly rather than through `step()`, call
 `controller.log(time)` explicitly when you want to commit a row.
 
-## Child controllers and hypothetical calculations
+## Sub-loggers and hypothetical calculations
 
-`log()` also calls `log(time)` on child loggers held as direct attributes or in
-lists or tuples. For example, a hybrid supervisor commits its component
+`log()` also calls `log(time)` on its sub-loggers: loggers held as direct
+attributes or in lists or tuples. For example, a hybrid supervisor commits its component
 controllers' rows with the same timestamp, even though it calls their
 `compute_controls()` methods directly. Each controller still has a separate
 cache; `get_log()` combines these caches when retrieving results.
@@ -71,12 +71,12 @@ the combined logs without a DataFrame index, overwriting the destination file;
 it does not clear the cache. Logging is kept in memory until written, with no
 automatic periodic flushing.
 
-`get_log()` recursively includes subsystem logs and outer-joins them on `time`.
+`get_log()` recursively includes sub-logger logs and outer-joins them on `time`.
 Every signal column is prefixed with its originating controller's `cname`,
 including the supervisor's signals. Only `time` remains unprefixed. For example,
 `supervisor.get_log()` might return `time`, `supervisor.reference_power`,
-`battery.x`, and `wind.error`. Missing subsystem rows appear as missing values (`NaN`s).
-The supervisor need not store any signals itself to retrieve its subsystem logs.
+`battery.x`, and `wind.error`. Missing sub-logger rows appear as missing values (`NaN`s).
+The supervisor need not store any signals itself to retrieve its sub-loggers' logs.
 Calling `battery.get_log()` still retrieves just the battery log.
 
 Controllers with logged signals must have a valid `cname`. Use distinct names to

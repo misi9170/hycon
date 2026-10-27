@@ -12,7 +12,8 @@ class LoggerMixin:
     (e.g. ``self.store("x", self.x)``) and local variables in compute_controls.
 
     log() appends one row (time and stored values) to an in-memory cache and then calls log() on
-    any controllers held by this one (e.g. a supervisor's component controllers). Use get_log()
+    its sub-loggers: loggers held as attributes, directly or in lists or tuples (e.g. a
+    supervisor's component controllers). Use get_log()
     or write_log() to retrieve the results.
     """
 
@@ -34,7 +35,7 @@ class LoggerMixin:
         )
 
     def log(self, time=None):
-        """Append the current stored values to the log cache, then log child controllers."""
+        """Append the current stored values to the log cache, then log sub-loggers."""
         row = {"time": time}
         row.update(self.__dict__.get("_log_row", {}))
         # Clear the pending row after committing it to the log cache
@@ -42,12 +43,12 @@ class LoggerMixin:
         if len(row) > 1:
             self.__dict__.setdefault("_log_cache", []).append(row)
 
-        for child in self._child_loggers():
-            child.log(time)
+        for sub_logger in self._sub_loggers():
+            sub_logger.log(time)
 
     def get_log(self):
         """
-        Return this controller's and its children's logs, outer-joined on time.
+        Return this logger's and its sub-loggers' logs, outer-joined on time.
 
         Signal columns are prefixed with the originating controller's cname.
         Combining nonempty logs requires unique timestamps in each log.
@@ -59,36 +60,36 @@ class LoggerMixin:
                 columns={name: f"{prefix}.{name}" for name in combined.columns if name != "time"}
             )
 
-        for child in self._child_loggers():
-            child_log = child.get_log()
-            if child_log.empty:
+        for sub_logger in self._sub_loggers():
+            sub_log = sub_logger.get_log()
+            if sub_log.empty:
                 continue
             if combined.empty:
-                combined = child_log
+                combined = sub_log
                 continue
-            overlap = (set(combined.columns) & set(child_log.columns)) - {"time"}
+            overlap = (set(combined.columns) & set(sub_log.columns)) - {"time"}
             if overlap:
                 raise ValueError(f"Duplicate log columns: {sorted(overlap)}. Use distinct cnames.")
-            combined = combined.merge(child_log, on="time", how="outer", validate="one_to_one")
+            combined = combined.merge(sub_log, on="time", how="outer", validate="one_to_one")
         return combined
 
     def write_log(self, filename):
-        """Write this controller's and its children's combined logs to a CSV file."""
+        """Write this logger's and its sub-loggers' combined logs to a CSV file."""
         self.get_log().to_csv(filename, index=False)
 
     def reset_log(self):
-        """Reset this controller's and its children's logs."""
+        """Reset this logger's and its sub-loggers' logs."""
         self.__dict__["_log_cache"] = []
-        for child in self._child_loggers():
-            child.reset_log()
+        for sub_logger in self._sub_loggers():
+            sub_logger.reset_log()
 
-    def _child_loggers(self):
-        children = []
+    def _sub_loggers(self):
+        sub_loggers = []
         for name, v in self.__dict__.items():
             if name in ("_log_row", "_log_cache"):
                 continue
             if isinstance(v, LoggerMixin):
-                children.append(v)
+                sub_loggers.append(v)
             elif isinstance(v, (list, tuple)):
-                children.extend(c for c in v if isinstance(c, LoggerMixin))
-        return children
+                sub_loggers.extend(c for c in v if isinstance(c, LoggerMixin))
+        return sub_loggers
