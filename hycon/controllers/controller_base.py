@@ -2,10 +2,10 @@ import copy
 import inspect
 from abc import ABCMeta, abstractmethod
 
-from hycon.controllers.logger_base import LoggerBase
+from hycon.logger import LoggerMixin
 
 
-class ControllerBase(LoggerBase, metaclass=ABCMeta):
+class ControllerBase(LoggerMixin, metaclass=ABCMeta):
     def __init__(self, interface, cname=None, verbose=True):
         super().__init__()
         self._s = interface

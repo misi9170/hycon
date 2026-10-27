@@ -3,7 +3,7 @@ import copy
 import pandas as pd
 
 
-class LoggerBase:
+class LoggerMixin:
     """
     Mixin that lets controllers log stored values once per step.
 
@@ -83,8 +83,8 @@ class LoggerBase:
     def _child_loggers(self):
         children = []
         for v in self.__dict__.values():
-            if isinstance(v, LoggerBase):
+            if isinstance(v, LoggerMixin):
                 children.append(v)
             elif isinstance(v, (list, tuple)):
-                children.extend(c for c in v if isinstance(c, LoggerBase))
+                children.extend(c for c in v if isinstance(c, LoggerMixin))
         return children

@@ -1,6 +1,6 @@
 # Controller logging
 
-`ControllerBase` inherits logging methods from `LoggerBase`. Each controller
+`ControllerBase` inherits logging methods from `LoggerMixin`. Each controller
 keeps its own in-memory log. No logging structure or list of attributes needs to
 be declared in a child class.
 
