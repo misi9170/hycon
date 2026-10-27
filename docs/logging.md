@@ -59,11 +59,12 @@ stored during it. It does not append a row to the cache.
 ## Retrieve and write results
 
 After stepping a controller, retrieve its log as a pandas DataFrame or write it
-to CSV:
+to a pickle or CSV:
 
 ```python
 df = battery.get_log()
-battery.write_log("battery.csv")
+battery.write_log("battery.pkl") # Default output type is pickle
+battery.write_log("battery.csv", output_type="csv") # CSV is also supported
 ```
 
 Both methods operate on committed rows, not pending values. `write_log()` writes
