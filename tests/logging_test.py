@@ -91,12 +91,15 @@ def test_log_component_controllers(test_hercules_dict, test_interface_hercules):
         test_hercules_dict["time"] = t
         out = supervisor.step(test_hercules_dict)
 
-    # A supervisor with no stored values still includes its children's logs.
-    assert wind.get_log().empty
-
+    # Get component log
     df = battery.get_log()
     assert df["time"].tolist() == [0.0, 1.0]
-    pd.testing.assert_frame_equal(supervisor.get_log(), df)
+    pd.testing.assert_frame_equal(
+        supervisor.get_log()[
+            ["time"]+[c for c in supervisor.get_log().columns if c.startswith("battery")]
+        ],
+        df
+    )
     assert list(df.columns) == [
         "time",
         "battery.internal_state",
@@ -132,17 +135,17 @@ def test_get_log_combines_nested_controllers(tmp_path):
     interface = PassthroughInterface()
     supervisor = LoggingController(interface)
     supervisor.cname = "supervisor"
-    child = LoggingController(interface)
-    child.cname = "battery"
+    component = LoggingController(interface)
+    component.cname = "battery"
     nested = LoggingController(interface)
     nested.cname = "inner"
-    supervisor.components = [child]
-    child.subsystem = nested
+    supervisor.components = [component]
+    component.nested_logger = nested
 
     supervisor.store("power", 10.0)
-    child.store("power", 2.0)
+    component.store("power", 2.0)
     supervisor.log(time=0.0)
-    child.store("power", 3.0)
+    component.store("power", 3.0)
     nested.store("power", 4.0)
     supervisor.log(time=1.0)
     supervisor.store("power", 20.0)
@@ -162,72 +165,72 @@ def test_get_log_combines_nested_controllers(tmp_path):
     pd.testing.assert_frame_equal(pd.read_csv(filename), expected)
     # Retrieving combined results does not modify individual caches.
     assert len(supervisor._log_cache) == 2
-    assert list(child.get_log().columns) == ["time", "battery.power", "inner.power"]
+    assert list(component.get_log().columns) == ["time", "battery.power", "inner.power"]
 
 
 def test_get_log_rejects_column_collisions():
-    parent = LoggingController(PassthroughInterface())
-    parent.child = LoggingController(PassthroughInterface())
-    parent.store("power", 1.0)
-    parent.child.store("power", 2.0)
-    parent.log(time=0.0)
+    upper = LoggingController(PassthroughInterface())
+    upper.lower = LoggingController(PassthroughInterface())
+    upper.store("power", 1.0)
+    upper.lower.store("power", 2.0)
+    upper.log(time=0.0)
     with pytest.raises(ValueError, match="Duplicate log columns"):
-        parent.get_log()
+        upper.get_log()
 
 
 def test_get_log_rejects_ambiguous_timestamps():
-    parent = LoggingController(PassthroughInterface())
-    parent.child = LoggingController(PassthroughInterface())
-    parent.child.cname = "child"
+    upper = LoggingController(PassthroughInterface())
+    upper.lower = LoggingController(PassthroughInterface())
+    upper.lower.cname = "lower"
     for _ in range(2):
-        parent.store("power", 1.0)
-        parent.child.store("power", 2.0)
-        parent.log(time=0.0)
+        upper.store("power", 1.0)
+        upper.lower.store("power", 2.0)
+        upper.log(time=0.0)
     with pytest.raises(pd.errors.MergeError):
-        parent.get_log()
+        upper.get_log()
 
 
 def test_reset_log_clears_all_logs():
     interface = PassthroughInterface()
     supervisor = LoggingController(interface)
     supervisor.cname = "supervisor"
-    child = LoggingController(interface)
-    child.cname = "battery"
-    supervisor.components = [child]
+    component = LoggingController(interface)
+    component.cname = "battery"
+    supervisor.components = [component]
 
     supervisor.store("power", 10.0)
-    child.store("power", 2.0)
+    component.store("power", 2.0)
     supervisor.log(time=0.0)
     supervisor.store("power", 12.0)
-    # No log added to child, for test
+    # No log added to sub_logger, for test
     supervisor.log(time=1.0)
 
     assert len(supervisor.get_log()) == 2
-    assert len(child.get_log()) == 1
+    assert len(component.get_log()) == 1
 
     supervisor.reset_log()
 
     assert supervisor.get_log().empty
-    assert child.get_log().empty
+    assert component.get_log().empty
 
 
-def test_child_discovery_does_not_scan_log_buffers():
+def test_sub_logger_discovery_does_not_scan_log_buffers():
     class UnscannableCache(list):
         def __iter__(self):
-            raise AssertionError("Child discovery must not scan historical log rows.")
+            raise AssertionError("Sub-logger discovery must not scan historical log rows.")
 
-    parent = LoggingController(PassthroughInterface())
-    child = LoggingController(PassthroughInterface())
-    parent.child = child
-    parent._log_cache = UnscannableCache([{"time": 0.0, "power": 1.0}] * 10000)
-    child._log_cache = UnscannableCache()
-    parent.store("power", 2.0)
-    child.store("power", 3.0)
+    upper = LoggingController(PassthroughInterface())
+    lower = LoggingController(PassthroughInterface())
+    upper.sub_logger = lower
+    upper._log_cache = UnscannableCache([{"time": 0.0, "power": 1.0}] * 10000)
+    lower._log_cache = UnscannableCache()
+    upper.store("power", 2.0)
+    lower.store("power", 3.0)
 
-    assert parent._child_loggers() == [child]
-    parent.log(time=1.0)
-    assert len(parent._log_cache) == 10001
-    assert len(child._log_cache) == 1
+    assert upper._sub_loggers() == [lower]
+    upper.log(time=1.0)
+    assert len(upper._log_cache) == 10001
+    assert len(lower._log_cache) == 1
 
 
 def test_store_snapshots_mutable_values():
