@@ -67,8 +67,8 @@ to a pickle or CSV:
 
 ```python
 df = battery.get_log()
-battery.write_log("battery.pkl") # Default output type is pickle
-battery.write_log("battery.csv", output_type="csv") # CSV is also supported
+battery.write_log("battery.pkl")  # Default output type is pickle
+battery.write_log("battery.csv", output_type="csv")  # CSV is also supported
 ```
 
 Both methods operate on committed rows, not pending values. `write_log()` writes
