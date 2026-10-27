@@ -88,6 +88,20 @@ class LoggerMixin:
         for sub_logger in self._sub_loggers():
             sub_logger.reset_log()
 
+    def _logger_tree(self):
+        """Return this logger and all nested sub-loggers, each once, in discovery order."""
+        tree = []
+        seen = set()
+        pending = [self]
+        while pending:
+            logger = pending.pop()
+            if id(logger) in seen:
+                continue
+            seen.add(id(logger))
+            tree.append(logger)
+            pending.extend(reversed(logger._sub_loggers()))
+        return tree
+
     def _sub_loggers(self):
         sub_loggers = []
         for name, v in self.__dict__.items():

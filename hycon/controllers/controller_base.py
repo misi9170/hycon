@@ -86,14 +86,23 @@ class ControllerBase(LoggerMixin, metaclass=ABCMeta):
         in the hybrid supervisory controller when querying component controllers for their desired
         power references without actually updating their states.
         """
-        # The log cache is not controller state, so leave it out of the snapshot (copying it
-        # would also get slow as it grows). Values stored here are discarded by the restore.
-        self.__dict__.setdefault("_log_row", {})
-        initial_state = copy.deepcopy({k: v for k, v in self.__dict__.items() if k != "_log_cache"})
+        # Snapshot each logger in the tree (this controller and its sub-loggers) separately,
+        # excluding log caches, which are not controller state and grow over time. Mapping every
+        # logger to itself in the shared memo keeps references between loggers pointing at the
+        # original objects, which are then restored in place. Values stored during the
+        # hypothetical calculation are discarded by the restore.
+        loggers = self._logger_tree()
+        memo = {id(logger): logger for logger in loggers}
+        snapshots = []
+        for logger in loggers:
+            logger.__dict__.setdefault("_log_row", {})
+            state = {k: v for k, v in logger.__dict__.items() if k != "_log_cache"}
+            snapshots.append((logger, copy.deepcopy(state, memo)))
         try:
             return self.compute_controls(measurements_dict)
         finally:
-            self.__dict__.update(initial_state)
+            for logger, state in snapshots:
+                logger.__dict__.update(state)
 
     @abstractmethod
     def set_controller_parameters(self, **kwargs):

@@ -281,3 +281,52 @@ def test_what_if_restores_state_on_error():
         controller.compute_controls_without_updating_state({})
     assert controller.x == 0.0
     assert controller._log_row == {"pending": 1.0}
+
+
+def test_what_if_does_not_copy_sub_logger_caches_and_restores_in_place():
+    class UncopyableCache(list):
+        def __deepcopy__(self, memo):
+            raise AssertionError("Hypothetical calculations must not copy log history.")
+
+    class StatefulSupervisor(LoggingController):
+        def compute_controls(self, measurements_dict):
+            for sub_logger in self.components:
+                sub_logger.compute_controls(measurements_dict)
+            self.x += 1.0
+            return {}
+
+    interface = PassthroughInterface()
+    supervisor = StatefulSupervisor(interface)
+    supervisor.cname = "supervisor"
+    battery = LoggingController(interface)
+    battery.cname = "battery"
+    nested = LoggingController(interface)
+    nested.cname = "nested"
+    supervisor.components = [battery]
+    battery.nested_logger = nested
+
+    for logger in (supervisor, battery, nested):
+        logger._log_cache = UncopyableCache([{"time": 0.0, "power": 1.0}])
+    caches = [logger._log_cache for logger in (supervisor, battery, nested)]
+    battery.store("pending", 5.0)
+
+    supervisor.compute_controls_without_updating_state({"ref": 2.0, "y": 0.0})
+
+    # Object identity is preserved, so external references stay valid.
+    assert supervisor.components[0] is battery
+    assert battery.nested_logger is nested
+    # Caches are the original objects, untouched.
+    assert [logger._log_cache for logger in (supervisor, battery, nested)] == caches
+    assert all(
+        logger._log_cache is cache for logger, cache in zip((supervisor, battery, nested), caches)
+    )
+    # State of every logger in the tree is restored, including pending values.
+    assert supervisor.x == 0.0
+    assert battery.x == 0.0
+    assert battery._log_row == {"pending": 5.0}
+    assert supervisor._log_row == {}
+
+    # Subsequent logging reaches the original objects.
+    battery.store("power", 2.0)
+    supervisor.log(time=1.0)
+    assert len(battery._log_cache) == 2
