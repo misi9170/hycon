@@ -74,6 +74,12 @@ class LoggerBase:
         """Write this controller's and its children's combined logs to a CSV file."""
         self.get_log().to_csv(filename, index=False)
 
+    def reset_log(self):
+        """Reset this controller's and its children's logs."""
+        self.__dict__["_log_cache"] = []
+        for child in self._child_loggers():
+            child.reset_log()
+
     def _child_loggers(self):
         children = []
         for v in self.__dict__.values():

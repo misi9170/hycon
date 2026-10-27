@@ -185,3 +185,27 @@ def test_get_log_rejects_ambiguous_timestamps():
         parent.log(time=0.0)
     with pytest.raises(pd.errors.MergeError):
         parent.get_log()
+
+
+def test_reset_log_clears_all_logs():
+    interface = PassthroughInterface()
+    supervisor = LoggingController(interface)
+    supervisor.cname = "supervisor"
+    child = LoggingController(interface)
+    child.cname = "battery"
+    supervisor.components = [child]
+
+    supervisor.store("power", 10.0)
+    child.store("power", 2.0)
+    supervisor.log(time=0.0)
+    supervisor.store("power", 12.0)
+    # No log added to child, for test
+    supervisor.log(time=1.0)
+
+    assert len(supervisor.get_log()) == 2
+    assert len(child.get_log()) == 1
+
+    supervisor.reset_log()
+
+    assert supervisor.get_log().empty
+    assert child.get_log().empty
