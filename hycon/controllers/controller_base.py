@@ -89,12 +89,11 @@ class ControllerBase(LoggerMixin, metaclass=ABCMeta):
         # The log cache is not controller state, so leave it out of the snapshot (copying it
         # would also get slow as it grows). Values stored here are discarded by the restore.
         self.__dict__.setdefault("_log_row", {})
-        self._initial_state = copy.deepcopy(
-            {k: v for k, v in self.__dict__.items() if k != "_log_cache"}
-        )
-        controls_dict = self.compute_controls(measurements_dict)
-        self.__dict__.update(copy.deepcopy(self._initial_state))
-        return controls_dict
+        initial_state = copy.deepcopy({k: v for k, v in self.__dict__.items() if k != "_log_cache"})
+        try:
+            return self.compute_controls(measurements_dict)
+        finally:
+            self.__dict__.update(initial_state)
 
     @abstractmethod
     def set_controller_parameters(self, **kwargs):

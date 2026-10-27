@@ -1,5 +1,6 @@
 import copy
 
+import numpy as np
 import pandas as pd
 
 
@@ -27,7 +28,9 @@ class LoggerMixin:
         """
         # Copy so that later in-place changes (e.g. to arrays) don't alter logged values
         self.__dict__.setdefault("_log_row", {})[name] = (
-            value if isinstance(value, (int, float, str, type(None))) else copy.deepcopy(value)
+            value
+            if isinstance(value, (int, float, complex, str, bytes, type(None), np.number, np.bool_))
+            else copy.deepcopy(value)
         )
 
     def log(self, time=None):
@@ -81,7 +84,9 @@ class LoggerMixin:
 
     def _child_loggers(self):
         children = []
-        for v in self.__dict__.values():
+        for name, v in self.__dict__.items():
+            if name in ("_log_row", "_log_cache"):
+                continue
             if isinstance(v, LoggerMixin):
                 children.append(v)
             elif isinstance(v, (list, tuple)):

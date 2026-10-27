@@ -99,19 +99,19 @@ def test_log_component_controllers(test_hercules_dict, test_interface_hercules):
     pd.testing.assert_frame_equal(supervisor.get_log(), df)
     assert list(df.columns) == [
         "time",
-        "battery.x",
-        "battery.reference_power",
-        "battery.e",
-        "battery.u",
+        "battery.internal_state",
+        "battery.processed_reference_power",
+        "battery.error",
+        "battery.incremental_control",
     ]
     # Logged values come from the real call, not the supervisor's what-if query
     assert np.isclose(
-        df["battery.e"].iloc[-1],
-        df["battery.reference_power"].iloc[-1] - test_hercules_dict["battery"]["power"],
+        df["battery.error"].iloc[-1],
+        df["battery.processed_reference_power"].iloc[-1] - test_hercules_dict["battery"]["power"],
     )
     assert np.isclose(
         out["battery"]["power_setpoint"],
-        test_hercules_dict["battery"]["power"] + df["battery.u"].iloc[-1],
+        test_hercules_dict["battery"]["power"] + df["battery.incremental_control"].iloc[-1],
     )
 
 
@@ -209,3 +209,72 @@ def test_reset_log_clears_all_logs():
 
     assert supervisor.get_log().empty
     assert child.get_log().empty
+
+
+def test_child_discovery_does_not_scan_log_buffers():
+    class UnscannableCache(list):
+        def __iter__(self):
+            raise AssertionError("Child discovery must not scan historical log rows.")
+
+    parent = LoggingController(PassthroughInterface())
+    child = LoggingController(PassthroughInterface())
+    parent.child = child
+    parent._log_cache = UnscannableCache([{"time": 0.0, "power": 1.0}] * 10000)
+    child._log_cache = UnscannableCache()
+    parent.store("power", 2.0)
+    child.store("power", 3.0)
+
+    assert parent._child_loggers() == [child]
+    parent.log(time=1.0)
+    assert len(parent._log_cache) == 10001
+    assert len(child._log_cache) == 1
+
+
+def test_store_snapshots_mutable_values():
+    controller = LoggingController(PassthroughInterface())
+    array = np.array([1.0, 2.0])
+    nested = {"values": [3.0]}
+    controller.store("array", array)
+    controller.store("nested", nested)
+    controller.store("scalar", np.float32(4.0))
+    array[0] = 100.0
+    nested["values"].append(100.0)
+    controller.log(time=0.0)
+
+    row = controller.get_log().iloc[0]
+    np.testing.assert_array_equal(row["tagged.array"], [1.0, 2.0])
+    assert row["tagged.nested"] == {"values": [3.0]}
+    assert row["tagged.scalar"] == np.float32(4.0)
+
+
+def test_what_if_preserves_cache_and_restores_pending_values():
+    class UncopyableCache(list):
+        def __deepcopy__(self, memo):
+            raise AssertionError("Hypothetical calculations must not copy log history.")
+
+    controller = LoggingController(PassthroughInterface())
+    controller._log_cache = UncopyableCache()
+    cache = controller._log_cache
+    controller.store("pending", np.array([1.0]))
+    for _ in range(3):
+        controller.compute_controls_without_updating_state({"ref": 100.0, "y": 0.0})
+        assert controller.x == 0.0
+        assert controller._log_cache is cache
+        assert "_initial_state" not in controller.__dict__
+        assert list(controller._log_row) == ["pending"]
+        np.testing.assert_array_equal(controller._log_row["pending"], [1.0])
+
+
+def test_what_if_restores_state_on_error():
+    class FailingController(LoggingController):
+        def compute_controls(self, measurements_dict):
+            self.x = 100.0
+            self.store("error", 100.0)
+            raise ValueError("Calculation failed")
+
+    controller = FailingController(PassthroughInterface())
+    controller.store("pending", 1.0)
+    with pytest.raises(ValueError, match="Calculation failed"):
+        controller.compute_controls_without_updating_state({})
+    assert controller.x == 0.0
+    assert controller._log_row == {"pending": 1.0}

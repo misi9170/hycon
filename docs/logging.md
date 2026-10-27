@@ -52,7 +52,7 @@ controllers' rows with the same timestamp, even though it calls their
 `compute_controls()` methods directly. Each controller still has a separate
 cache; `get_log()` combines these caches when retrieving results.
 
-On normal return, `compute_controls_without_updating_state()` restores the
+On return or error, `compute_controls_without_updating_state()` restores the
 pending values from before the hypothetical calculation, discarding values
 stored during it. It does not append a row to the cache.
 
