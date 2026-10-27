@@ -36,7 +36,8 @@ timestamp.
 
 If no values have been stored, no row is appended. Values are not carried forward
 to subsequent rows. If different rows contain different signals, the DataFrame
-and CSV have missing entries (represented as `NaN`) for signals absent from a row.
+and written file have missing entries (represented as `NaN`) for signals absent
+from a row.
 
 Mutable values such as arrays are copied when `store()` stores the row, so later
 changes do not affect that row.
@@ -50,7 +51,10 @@ When calling `compute_controls()` directly rather than through `step()`, call
 attributes or in lists or tuples. For example, a hybrid supervisor commits its component
 controllers' rows with the same timestamp, even though it calls their
 `compute_controls()` methods directly. Each controller still has a separate
-cache; `get_log()` combines these caches when retrieving results.
+cache; `get_log()` combines these caches when retrieving results. Sub-loggers
+are found recursively, and each is visited once, so a sub-logger reachable
+through several attributes, or one holding a reference back to its parent, is
+logged only once.
 
 On return or error, `compute_controls_without_updating_state()` restores the
 pending values from before the hypothetical calculation, discarding values
@@ -68,9 +72,11 @@ battery.write_log("battery.csv", output_type="csv") # CSV is also supported
 ```
 
 Both methods operate on committed rows, not pending values. `write_log()` writes
-the combined logs without a DataFrame index, overwriting the destination file;
-it does not clear the cache. Logging is kept in memory until written, with no
-automatic periodic flushing.
+the combined logs, overwriting the destination file; it does not clear the
+cache. Pickle output preserves the DataFrame exactly, including array values and
+data types, and can be read back with `pandas.read_pickle()`. CSV output omits
+the DataFrame index and writes array values as text. Logging is kept in memory
+until written, with no automatic periodic flushing.
 
 `get_log()` recursively includes sub-logger logs and outer-joins them on `time`.
 Every signal column is prefixed with its originating controller's `cname`,

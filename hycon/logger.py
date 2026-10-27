@@ -36,15 +36,13 @@ class LoggerMixin:
 
     def log(self, time=None):
         """Append the current stored values to the log cache, then log sub-loggers."""
-        row = {"time": time}
-        row.update(self.__dict__.get("_log_row", {}))
-        # Clear the pending row after committing it to the log cache
-        self._log_row = {}
-        if len(row) > 1:
-            self.__dict__.setdefault("_log_cache", []).append(row)
-
-        for sub_logger in self._sub_loggers():
-            sub_logger.log(time)
+        for logger in self._logger_tree():
+            row = {"time": time}
+            row.update(logger.__dict__.get("_log_row", {}))
+            # Clear the pending row after committing it to the log cache
+            logger._log_row = {}
+            if len(row) > 1:
+                logger.__dict__.setdefault("_log_cache", []).append(row)
 
     def get_log(self):
         """
@@ -53,24 +51,22 @@ class LoggerMixin:
         Signal columns are prefixed with the originating controller's cname.
         Combining nonempty logs requires unique timestamps in each log.
         """
-        combined = pd.DataFrame(self.__dict__.get("_log_cache", []))
-        if not combined.empty:
-            prefix = self.cname
-            combined = combined.rename(
-                columns={name: f"{prefix}.{name}" for name in combined.columns if name != "time"}
+        combined = pd.DataFrame()
+        for logger in self._logger_tree():
+            log = pd.DataFrame(logger.__dict__.get("_log_cache", []))
+            if log.empty:
+                continue
+            prefix = logger.cname
+            log = log.rename(
+                columns={name: f"{prefix}.{name}" for name in log.columns if name != "time"}
             )
-
-        for sub_logger in self._sub_loggers():
-            sub_log = sub_logger.get_log()
-            if sub_log.empty:
-                continue
             if combined.empty:
-                combined = sub_log
+                combined = log
                 continue
-            overlap = (set(combined.columns) & set(sub_log.columns)) - {"time"}
+            overlap = (set(combined.columns) & set(log.columns)) - {"time"}
             if overlap:
                 raise ValueError(f"Duplicate log columns: {sorted(overlap)}. Use distinct cnames.")
-            combined = combined.merge(sub_log, on="time", how="outer", validate="one_to_one")
+            combined = combined.merge(log, on="time", how="outer", validate="one_to_one")
         return combined
 
     def write_log(self, filename, output_type="pickle"):
@@ -84,9 +80,8 @@ class LoggerMixin:
 
     def reset_log(self):
         """Reset this logger's and its sub-loggers' logs."""
-        self.__dict__["_log_cache"] = []
-        for sub_logger in self._sub_loggers():
-            sub_logger.reset_log()
+        for logger in self._logger_tree():
+            logger.__dict__["_log_cache"] = []
 
     def _logger_tree(self):
         """Return this logger and all nested sub-loggers, each once, in discovery order."""

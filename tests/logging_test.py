@@ -330,3 +330,35 @@ def test_what_if_does_not_copy_sub_logger_caches_and_restores_in_place():
     battery.store("power", 2.0)
     supervisor.log(time=1.0)
     assert len(battery._log_cache) == 2
+
+
+def test_logging_handles_cycles_and_shared_sub_loggers():
+    interface = PassthroughInterface()
+    supervisor = LoggingController(interface)
+    supervisor.cname = "supervisor"
+    battery = LoggingController(interface)
+    battery.cname = "battery"
+    supervisor.components = [battery]
+    supervisor.battery = battery  # Same sub-logger reachable twice
+    battery.parent = supervisor  # Back-reference creates a cycle
+
+    supervisor.store("power", 10.0)
+    battery.store("power", 2.0)
+    supervisor.log(time=0.0)
+    battery.store("power", 3.0)
+    supervisor.log(time=1.0)
+
+    assert len(battery._log_cache) == 2
+    expected = pd.DataFrame(
+        {
+            "time": [0.0, 1.0],
+            "supervisor.power": [10.0, np.nan],
+            "battery.power": [2.0, 3.0],
+        }
+    )
+    pd.testing.assert_frame_equal(supervisor.get_log(), expected)
+    # Starting from the sub-logger reaches the supervisor through the back-reference.
+    assert set(battery.get_log().columns) == set(expected.columns)
+
+    battery.reset_log()
+    assert supervisor.get_log().empty
