@@ -103,11 +103,11 @@ class WindFarmPowerDistributingController(ControllerBase):
         turbine_power_setpoints = np.array(
             [farm_power_reference / self.n_turbines] * self.n_turbines
         )
-        self.store("turbine_power_setpoints_pre_limit", turbine_power_setpoints.tolist())
+        self.store("turbine_power_setpoints_pre_limit", turbine_power_setpoints)
 
         # Apply ramp rate limit
         turbine_power_setpoints = self.apply_ramp_rate_limit(turbine_power_setpoints)
-        self.store("turbine_power_setpoints", turbine_power_setpoints.tolist())
+        self.store("turbine_power_setpoints", turbine_power_setpoints)
 
         return {self.cname: {"power_setpoint": turbine_power_setpoints.tolist()}}
 
@@ -201,10 +201,10 @@ class WindFarmPowerTrackingController(WindFarmPowerDistributingController):
         self.store("turbine_reference_increment", delta_P_ref)
 
         unclipped_setpoints = np.array(turbine_powers) + delta_P_ref
-        self.store("turbine_power_setpoints_pre_limit", unclipped_setpoints.tolist())
+        self.store("turbine_power_setpoints_pre_limit", unclipped_setpoints)
 
         # Apply ramp rate limit
         turbine_power_setpoints = self.apply_ramp_rate_limit(unclipped_setpoints)
-        self.store("turbine_power_setpoints", turbine_power_setpoints.tolist())
+        self.store("turbine_power_setpoints", turbine_power_setpoints)
 
         return {self.cname: {"power_setpoint": turbine_power_setpoints.tolist()}}

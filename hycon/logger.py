@@ -73,9 +73,14 @@ class LoggerMixin:
             combined = combined.merge(sub_log, on="time", how="outer", validate="one_to_one")
         return combined
 
-    def write_log(self, filename):
-        """Write this logger's and its sub-loggers' combined logs to a CSV file."""
-        self.get_log().to_csv(filename, index=False)
+    def write_log(self, filename, output_type="pickle"):
+        """Write this logger's and its sub-loggers' combined logs to a file."""
+        if output_type == "pickle":
+            self.get_log().to_pickle(filename)
+        elif output_type == "csv":
+            self.get_log().to_csv(filename, index=False)
+        else:
+            raise ValueError(f"Unsupported output_type: {output_type}")
 
     def reset_log(self):
         """Reset this logger's and its sub-loggers' logs."""
