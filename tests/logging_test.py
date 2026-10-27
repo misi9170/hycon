@@ -57,7 +57,7 @@ def test_log_stored_values(tmp_path):
     assert np.allclose(df["tagged.vec"].iloc[1], [4.0, 8.0])
 
     filename = tmp_path / "log.csv"
-    controller.write_log(filename)
+    controller.write_log(filename, output_type="csv")
     assert pd.read_csv(filename)["tagged.e"].tolist() == [1.0, 4.0]
 
     # Attributes alone do not produce rows once the stored values have been consumed.
@@ -160,9 +160,9 @@ def test_get_log_combines_nested_controllers(tmp_path):
         }
     )
     pd.testing.assert_frame_equal(supervisor.get_log(), expected)
-    filename = tmp_path / "combined.csv"
+    filename = tmp_path / "combined.pkl"
     supervisor.write_log(filename)
-    pd.testing.assert_frame_equal(pd.read_csv(filename), expected)
+    pd.testing.assert_frame_equal(pd.read_pickle(filename), expected)
     # Retrieving combined results does not modify individual caches.
     assert len(supervisor._log_cache) == 2
     assert list(component.get_log().columns) == ["time", "battery.power", "inner.power"]
