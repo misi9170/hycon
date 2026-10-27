@@ -96,9 +96,9 @@ def test_log_component_controllers(test_hercules_dict, test_interface_hercules):
     assert df["time"].tolist() == [0.0, 1.0]
     pd.testing.assert_frame_equal(
         supervisor.get_log()[
-            ["time"]+[c for c in supervisor.get_log().columns if c.startswith("battery")]
+            ["time"] + [c for c in supervisor.get_log().columns if c.startswith("battery")]
         ],
-        df
+        df,
     )
     assert list(df.columns) == [
         "time",
